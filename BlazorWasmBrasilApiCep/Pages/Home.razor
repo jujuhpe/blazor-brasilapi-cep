@@ -1,0 +1,126 @@
+﻿@page "/"
+
+@using System.Net
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@using BlazorWasmBrasilApiCep.Models
+@inject HttpClient Http
+
+<PageTitle>Consulta CEP - BrasilAPI</PageTitle>
+
+<h1>Consulta de CEP com Blazor WebAssembly</h1>
+
+<form class="row mb-3" @onsubmit="ConsultarCep" @onsubmit:preventDefault>
+    <div class="col-md-4">
+        <label for="cepInput" class="form-label">Digite o CEP:</label>
+        <input id="cepInput" class="form-control" @bind="cepDigitado" @bind:event="oninput"
+               placeholder="Ex: 01001000" inputmode="numeric" autocomplete="postal-code"
+               disabled="@carregando" aria-describedby="mensagemErro" />
+    </div>
+    <div class="col-md-2 d-flex align-items-end mt-2 mt-md-0">
+        <button class="btn btn-primary w-100" type="submit" disabled="@carregando">
+            @(carregando ? "Buscando..." : "Consultar")
+        </button>
+    </div>
+</form>
+
+<div aria-live="polite" aria-atomic="true">
+    @if (!string.IsNullOrWhiteSpace(mensagemErro))
+    {
+        <div id="mensagemErro" class="alert alert-danger" role="alert">@mensagemErro</div>
+    }
+
+    @if (endereco is not null)
+    {
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title h4 text-success">Endereço Encontrado</h2>
+                <p><strong>CEP:</strong> @endereco.cep</p>
+                <p><strong>Logradouro:</strong> @Exibir(endereco.street)</p>
+                <p><strong>Bairro:</strong> @Exibir(endereco.neighborhood)</p>
+                <p><strong>Cidade:</strong> @endereco.city (@endereco.state)</p>
+                <p><strong>Serviço:</strong> @endereco.service</p>
+                @if (endereco.ibge is not null)
+                {
+                    <hr />
+                    <h3 class="h6 text-muted">Dados do IBGE</h3>
+                    <p><strong>Cidade IBGE:</strong> @Exibir(endereco.ibge.city)</p>
+                    <p><strong>Estado IBGE:</strong> @Exibir(endereco.ibge.state)</p>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string cepDigitado = string.Empty;
+    private string? mensagemErro;
+    private Cep? endereco;
+    private bool carregando;
+
+    private static string Exibir(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? "Não informado" : valor;
+
+    private async Task ConsultarCep()
+    {
+        if (carregando)
+            return;
+
+        mensagemErro = null;
+        endereco = null;
+        var cep = cepDigitado.Trim();
+
+        if (!Regex.IsMatch(cep, @"\A[0-9]{5}-?[0-9]{3}\z"))
+        {
+            mensagemErro = "Informe um CEP válido com 8 dígitos (ex.: 30130000 ou 30130-000).";
+            return;
+        }
+
+        carregando = true;
+        try
+        {
+            // A rota correta inclui /api, como nas capturas da documentação no material.
+            using var resposta = await Http.GetAsync($"api/cep/v1/{cep.Replace("-", "")}");
+            if (resposta.StatusCode == HttpStatusCode.NotFound)
+            {
+                mensagemErro = "CEP não encontrado. Verifique o número informado.";
+                return;
+            }
+            if (resposta.StatusCode == HttpStatusCode.BadRequest)
+            {
+                mensagemErro = "CEP inválido. Verifique o número informado.";
+                return;
+            }
+            if (!resposta.IsSuccessStatusCode)
+            {
+                mensagemErro = "Não foi possível consultar o CEP. Tente novamente mais tarde.";
+                return;
+            }
+
+            var resultado = await resposta.Content.ReadFromJsonAsync<Cep>();
+            if (resultado is null || string.IsNullOrWhiteSpace(resultado.cep)
+                || string.IsNullOrWhiteSpace(resultado.city) || string.IsNullOrWhiteSpace(resultado.state))
+            {
+                mensagemErro = "A API retornou uma resposta inválida. Tente novamente.";
+                return;
+            }
+            endereco = resultado;
+        }
+        catch (HttpRequestException)
+        {
+            mensagemErro = "Não foi possível conectar à BrasilAPI. Verifique sua conexão e tente novamente.";
+        }
+        catch (OperationCanceledException)
+        {
+            mensagemErro = "A consulta demorou demais. Tente novamente.";
+        }
+        catch (JsonException)
+        {
+            mensagemErro = "A API retornou uma resposta inválida. Tente novamente.";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+}
