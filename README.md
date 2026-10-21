@@ -55,7 +55,7 @@ As propriedades dos modelos preservam os nomes JSON mostrados no PDF. As strings
 
 Repositório: https://github.com/jujuhpe/blazor-brasilapi-cep
 
-O repositório foi criado como privado, com o `.gitignore` do Visual Studio e os arquivos do exercício na branch `main`.
+O repositório é público, com o `.gitignore` do Visual Studio e os arquivos do exercício na branch `main`.
 
 Antes de cada envio, encerre a aplicação e remova apenas `BlazorWasmBrasilApiCep/bin` e `BlazorWasmBrasilApiCep/obj`, como orientado no PDF. Esses diretórios também estão cobertos pelo `.gitignore`.
 
